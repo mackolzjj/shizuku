@@ -12,3 +12,6 @@
 /out
 /signing.properties
 /.kotlin
+# 本地构建日志与临时签名产物
+shizuku_build.log
+/key.jks

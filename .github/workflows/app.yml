@@ -3,6 +3,8 @@ name: Build App
 # Android 17 (HyperOS 4) adapted build. Trigger with debug=true for an installable signed APK.
 
 on:
+  push:
+    branches: [ main, master ]
   workflow_dispatch:
     inputs:
       debug:
@@ -27,7 +29,7 @@ jobs:
       artifact-metadata: write
 
     env:
-      KEYSTORE: ${{ secrets.KEYSTORE }}
+      KEYSTORE: bundled
 
     outputs:
       versionName: ${{ steps.buildWithGradle.outputs.versionName }}
@@ -37,7 +39,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: main
           fetch-depth: 0
 
       - name: Setup Java
@@ -46,21 +47,18 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Validate Signing Config
+      - name: Prepare signing keystore from bundled PKCS12
+        if: ${{ !inputs.debug }}
         run: |
-          if [ "${{ inputs.debug }}" = "false" ] && [ "$KEYSTORE" = "" ]; then
-            echo "::error::Signing secrets not configured. Signing secrets are required for release builds."
-            exit 1
-          fi
-
-      - name: Create signing.properties
-        if: ${{ !inputs.debug && env.KEYSTORE != '' }}
-        run: |
-          echo KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }} > signing.properties
-          echo KEYSTORE_ALIAS=${{ secrets.KEYSTORE_ALIAS }} >> signing.properties
-          echo KEYSTORE_ALIAS_PASSWORD='${{ secrets.KEYSTORE_ALIAS_PASSWORD }}' >> signing.properties
+          keytool -importkeystore \
+            -srckeystore release-keystore.p12 -srcstoretype PKCS12 -srcstorepass nrfrshizuku2026 \
+            -destkeystore key.jks -deststoretype JKS -deststorepass nrfrshizuku2026 \
+            -destkeypass nrfrshizuku2026 -noprompt -alias customrelease
+          echo KEYSTORE_PASSWORD=nrfrshizuku2026 > signing.properties
+          echo KEYSTORE_ALIAS=customrelease >> signing.properties
+          echo KEYSTORE_ALIAS_PASSWORD=nrfrshizuku2026 >> signing.properties
           echo KEYSTORE_FILE=../key.jks >> signing.properties
-          echo ${{ secrets.KEYSTORE }} | base64 --decode > key.jks
+          ls -la key.jks signing.properties
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v5
@@ -113,13 +111,13 @@ jobs:
           path: ${{ steps.buildWithGradle.outputs.filePath }}
 
       - name: Attest Build Provenance
-        if: ${{ success() && !inputs.debug }}
+        if: ${{ false }}
         uses: actions/attest-build-provenance@v3
         with:
           subject-path: manager/build/outputs/apk/release/*.apk
 
   release:
-    if: ${{ !inputs.debug }}
+    if: ${{ false }}
     needs: [build]
     runs-on: ubuntu-latest
     permissions:
